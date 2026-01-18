@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   User, Calendar, Users, BookOpen, MapPin, Clock, Bell, Settings, LogOut,
   Plus, Edit, Trash2, Filter, Search, Star, ChevronDown, ChevronRight,
-  Home, FileText, Upload, Download, BarChart3, Grid, AlertCircle, CheckCircle,
-  X, Save, Eye, EyeOff, Lock, RefreshCw, Send, MessageSquare, Building,
-  GraduationCap, Computer, FlaskConical, Presentation, Phone, Mail, ArrowRight,
+  Home, Upload, Download, BarChart3, Grid, AlertCircle, CheckCircle,
+  X, Save, Eye, EyeOff, Lock, RefreshCw, Send, Building,
+  GraduationCap, Computer, Presentation, Mail, ArrowRight,
   Info, ChevronUp,
-  TrendingUp, PieChart, Activity
+  TrendingUp, Activity
 } from 'lucide-react';
 
 // ==================== IMPORTS FROM ORGANIZED STRUCTURE ====================
 import APIService from './services/APIService';
 import { useAuth } from './hooks/useAuth';
-import { AppContext, useApp } from './context/AppContext';
+import { AppContext } from './context/AppContext';
 import {
   LoadingSpinner,
   Button,
@@ -33,32 +33,15 @@ const EnhancedDashboard = () => {
   const [showOptimizationModal, setShowOptimizationModal] = useState(false);
   const [activeOptimization, setActiveOptimization] = useState(null);
 
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
 
-  useEffect(() => {
-    loadRealTimeData();
-    if (user?.role === 'admin') {
-      loadOptimizationSuggestions();
-    }
-
-    // Refresh data every 30 seconds
-    const interval = setInterval(() => {
-      if (!activeOptimization) {
-        loadRealTimeData();
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [selectedBatch]);
-
-  const loadRealTimeData = async () => {
+  const loadRealTimeData = useCallback(async () => {
     try {
       const data = await api.getRealTimeDashboard();
       console.log('Real-time data loaded:', data);
       setRealTimeData(data);
     } catch (error) {
       console.error('Failed to load real-time data:', error);
-      // Set default empty data
       setRealTimeData({
         metrics: [
           { metric_type: 'leave_requests', pending_count: 0, active_count: 0, total_count: 0 },
@@ -71,9 +54,9 @@ const EnhancedDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
 
-  const loadOptimizationSuggestions = async () => {
+  const loadOptimizationSuggestions = useCallback(async () => {
     if (user?.role !== 'admin') return;
 
     try {
@@ -85,7 +68,22 @@ const EnhancedDashboard = () => {
       console.error('Failed to load optimization suggestions:', error);
       setOptimizationSuggestions([]);
     }
-  };
+  }, [api, selectedBatch, user]);
+
+  useEffect(() => {
+    loadRealTimeData();
+    if (user?.role === 'admin') {
+      loadOptimizationSuggestions();
+    }
+
+    const interval = setInterval(() => {
+      if (!activeOptimization) {
+        loadRealTimeData();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [loadRealTimeData, loadOptimizationSuggestions, user, activeOptimization]);
 
   const handleOptimization = async (optimizationType) => {
     if (!window.confirm(`Are you sure you want to run ${optimizationType} optimization? This will modify the timetable.`)) {
@@ -443,6 +441,7 @@ const EnhancedDashboard = () => {
 // Login Component
 const LoginForm = () => {
   const { login } = useAuth();
+  const api = useMemo(() => new APIService(), []);
 
   const [formData, setFormData] = useState({ username: '', password: '', role: 'student' });
   const [loading, setLoading] = useState(false);
@@ -454,7 +453,6 @@ const LoginForm = () => {
     setError('');
 
     try {
-      const api = new APIService();
       const response = await api.login(formData);
       login(response.user, response.token);
     } catch (err) {
@@ -522,7 +520,7 @@ const LoginForm = () => {
   );
 };
 
-
+// eslint-disable-next-line no-unused-vars
 const FacultyLogin = ({ onLoginSuccess }) => {
   const [formData, setFormData] = useState({
     email: '',
@@ -665,13 +663,9 @@ const FacultyProfile = () => {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     try {
       const data = await api.request('/faculty/profile');
       setProfile(data);
@@ -680,7 +674,11 @@ const FacultyProfile = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -879,13 +877,9 @@ const FacultyLoginManagement = () => {
   const [bulkResults, setBulkResults] = useState(null);
   const [resettingPassword, setResettingPassword] = useState(null);
 
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
 
-  useEffect(() => {
-    loadLoginStatus();
-  }, []);
-
-  const loadLoginStatus = async () => {
+  const loadLoginStatus = useCallback(async () => {
     try {
       const data = await api.request('/faculty/login-status');
       setLoginStatus(data);
@@ -894,7 +888,11 @@ const FacultyLoginManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadLoginStatus();
+  }, [loadLoginStatus]);
 
   const handleBulkRegister = async () => {
     setBulkRegistering(true);
@@ -1303,16 +1301,13 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [generateLoading, setGenerateLoading] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState('CS2023');
+  // eslint-disable-next-line no-unused-vars
+  const [generateLoading, setGenerateLoading] = useState(false);
 
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       // In a real app, you'd have a dashboard analytics endpoint
       setStats({
@@ -1330,7 +1325,11 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   const handleGenerateTimetable = async (algorithm = 'balanced') => {
     setGenerateLoading(true);
@@ -1339,7 +1338,7 @@ const Dashboard = () => {
         department: 'Computer Science',
         semester: 3,
         batch: selectedBatch,
-        algorithm: algorithm // Add algorithm selection
+        algorithm: algorithm
       };
 
       const response = await api.generateTimetable(generateData);
@@ -1651,13 +1650,9 @@ const FacultyManagement = () => {
     name: '', email: '', department: '', subjects: []
   });
 
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
 
-  useEffect(() => {
-    loadFaculty();
-  }, []);
-
-  const loadFaculty = async () => {
+  const loadFaculty = useCallback(async () => {
     try {
       const data = await api.getFaculty();
       setFaculty(data);
@@ -1666,7 +1661,11 @@ const FacultyManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadFaculty();
+  }, [loadFaculty]);
 
   const handleSubmit = async () => {
     try {
@@ -1848,13 +1847,9 @@ const StudentsManagement = () => {
     name: '', email: '', batch: '', semester: 1, department: ''
   });
 
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
 
-  useEffect(() => {
-    loadStudents();
-  }, []);
-
-  const loadStudents = async () => {
+  const loadStudents = useCallback(async () => {
     try {
       const data = await api.getStudents();
       setStudents(data);
@@ -1863,7 +1858,11 @@ const StudentsManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadStudents();
+  }, [loadStudents]);
 
   const handleSubmit = async () => {
     try {
@@ -2040,13 +2039,9 @@ const RoomsManagement = () => {
     name: '', type: 'Classroom', capacity: '', department: '', location: ''
   });
 
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
 
-  useEffect(() => {
-    loadRooms();
-  }, []);
-
-  const loadRooms = async () => {
+  const loadRooms = useCallback(async () => {
     try {
       const data = await api.getRooms();
       setRooms(data);
@@ -2055,7 +2050,11 @@ const RoomsManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadRooms();
+  }, [loadRooms]);
 
   const handleSubmit = async () => {
     try {
@@ -2240,13 +2239,9 @@ const SubjectsManagement = () => {
     name: '', code: '', department: '', credits: 1, type: 'Theory'
   });
 
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
 
-  useEffect(() => {
-    loadSubjects();
-  }, []);
-
-  const loadSubjects = async () => {
+  const loadSubjects = useCallback(async () => {
     try {
       const data = await api.getSubjects();
       setSubjects(data);
@@ -2255,7 +2250,11 @@ const SubjectsManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadSubjects();
+  }, [loadSubjects]);
 
   const handleSubmit = async () => {
     try {
@@ -2433,7 +2432,7 @@ const SubjectsManagement = () => {
 // Enhanced Timetable Component
 const Timetable = () => {
   const { user } = useAuth();
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
   const [timetable, setTimetable] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState('CS2023');
   const [loading, setLoading] = useState(false);
@@ -2446,15 +2445,7 @@ const Timetable = () => {
   ];
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-  useEffect(() => {
-    if (user?.role === 'faculty') {
-      loadFacultyTimetable();
-    } else {
-      loadTimetable(selectedBatch);
-    }
-  }, [selectedBatch, user]);
-
-  const loadTimetable = async (batch) => {
+  const loadTimetable = useCallback(async (batch) => {
     setLoading(true);
     try {
       const data = await api.getTimetable(batch);
@@ -2464,9 +2455,9 @@ const Timetable = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
 
-  const loadFacultyTimetable = async () => {
+  const loadFacultyTimetable = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.getFacultyTimetable(user.id);
@@ -2476,7 +2467,15 @@ const Timetable = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api, user]);
+
+  useEffect(() => {
+    if (user?.role === 'faculty') {
+      loadFacultyTimetable();
+    } else {
+      loadTimetable(selectedBatch);
+    }
+  }, [selectedBatch, user, loadTimetable, loadFacultyTimetable]);
 
   const handleGenerateTimetable = async () => {
     setGenerateLoading(true);
@@ -2616,27 +2615,30 @@ const Timetable = () => {
 
 
 const MultiSectionTimetable = () => {
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
   const { user } = useAuth();
 
   
   const [selectedBatch, setSelectedBatch] = useState('CS2023');
   const [selectedSection, setSelectedSection] = useState('A');
   const [sections, setSections] = useState(['A', 'B', 'C']);
+  // eslint-disable-next-line no-unused-vars
   const [availableSections, setAvailableSections] = useState(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S']);
   const [timetable, setTimetable] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false); // NEW
-  const [deleteTarget, setDeleteTarget] = useState({ all: false, sections: [] }); // NEW
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState({ all: false, sections: [] });
   const [generateLoading, setGenerateLoading] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [validationReport, setValidationReport] = useState(null);
   const [summaryData, setSummaryData] = useState(null);
   const [viewMode, setViewMode] = useState('grid');
-  const [sectionsConfig, setSectionsConfig] = useState([]); // NEW
-  const [showDayOffModal, setShowDayOffModal] = useState(false); // NEW
+  const [sectionsConfig, setSectionsConfig] = useState([]);
+  const [showDayOffModal, setShowDayOffModal] = useState(false);
 
   const timeSlots = [
     '09:00-10:00', '10:00-11:00', '11:00-12:00',
@@ -2644,11 +2646,7 @@ const MultiSectionTimetable = () => {
   ];
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-  useEffect(() => {
-    loadSectionTimetable();
-  }, [selectedBatch, selectedSection]);
-
-  const loadSectionTimetable = async () => {
+  const loadSectionTimetable = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.getSectionTimetable(selectedBatch, selectedSection);
@@ -2658,7 +2656,11 @@ const MultiSectionTimetable = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api, selectedBatch, selectedSection]);
+
+  useEffect(() => {
+    loadSectionTimetable();
+  }, [loadSectionTimetable]);
 
 
   const handleGenerateMultiSection = async () => {
@@ -3365,14 +3367,13 @@ const MultiSectionTimetable = () => {
 };
 
 const FacultyMyTimetable = () => {
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
+  // eslint-disable-next-line no-unused-vars
   const { user } = useAuth();
   
   const [timetable, setTimetable] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('week'); // week, day, list
-  const [selectedDay, setSelectedDay] = useState('Monday');
-  const [selectedWeek, setSelectedWeek] = useState('current');
+  const [viewMode, setViewMode] = useState('week');
   const [filters, setFilters] = useState({
     batch: 'all',
     section: 'all',
@@ -3386,58 +3387,46 @@ const FacultyMyTimetable = () => {
     '14:00-15:00', '15:00-16:00', '16:00-17:00'
   ];
 
-  useEffect(() => {
-    loadFacultyTimetable();
-  }, [filters]);
-
-  const loadFacultyTimetable = async () => {
-    setLoading(true);
-    try {
-      // Get faculty profile to get faculty ID
-      const profile = await api.getFacultyProfile();
-      
-      // Get timetable for this faculty
-      const data = await api.getFacultyTimetable(profile.id);
-      setTimetable(data);
-      
-      // Calculate statistics
-      calculateStats(data);
-    } catch (error) {
-      console.error('Failed to load faculty timetable:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const calculateStats = (data) => {
-    const filteredData = applyFilters(data);
-    
-    const uniqueBatches = [...new Set(filteredData.map(c => c.batch))];
-    const uniqueSections = [...new Set(filteredData.map(c => `${c.batch}-${c.section || 'A'}`))];
-    const uniqueSubjects = [...new Set(filteredData.map(c => c.subject_name))];
-    const totalClasses = filteredData.length;
-    const totalHours = filteredData.reduce((sum, c) => sum + (c.duration_minutes / 60), 0);
-    
-    setStats({
-      totalClasses,
-      totalHours: totalHours,
-      uniqueBatches: uniqueBatches.length,
-      uniqueSections: uniqueSections.length,
-      uniqueSubjects: uniqueSubjects.length,
-      batches: uniqueBatches,
-      sections: uniqueSections,
-      subjects: uniqueSubjects
-    });
-  };
-
-  const applyFilters = (data) => {
+  const applyFilters = useCallback((data) => {
     return data.filter(item => {
       if (filters.batch !== 'all' && item.batch !== filters.batch) return false;
       if (filters.section !== 'all' && item.section !== filters.section) return false;
       if (filters.subject !== 'all' && item.subject_name !== filters.subject) return false;
       return true;
     });
-  };
+  }, [filters]);
+
+  const calculateStats = useCallback((data) => {
+    const filteredData = applyFilters(data);
+    const uniqueBatches = [...new Set(filteredData.map(c => c.batch))];
+    const uniqueSections = [...new Set(filteredData.map(c => `${c.batch}-${c.section || 'A'}`))];
+    const uniqueSubjects = [...new Set(filteredData.map(c => c.subject_name))];
+    const hours = filteredData.length * 1;
+    setStats({
+      batches: uniqueBatches.length,
+      sections: uniqueSections.length,
+      subjects: uniqueSubjects.length,
+      hours: hours
+    });
+  }, [applyFilters]);
+
+  const loadFacultyTimetable = useCallback(async () => {
+    setLoading(true);
+    try {
+      const profile = await api.getFacultyProfile();
+      const data = await api.getFacultyTimetable(profile.id);
+      setTimetable(data);
+      calculateStats(data);
+    } catch (error) {
+      console.error('Failed to load faculty timetable:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [api, calculateStats]);
+
+  useEffect(() => {
+    loadFacultyTimetable();
+  }, [loadFacultyTimetable]);
 
   const getClassForSlot = (day, timeSlot) => {
     const filteredData = applyFilters(timetable);
@@ -3824,6 +3813,7 @@ const FacultyMyTimetable = () => {
 // Add to your React file after the existing imports
 
 const MultiSectionDataImport = () => {
+  // eslint-disable-next-line no-unused-vars
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
@@ -4123,7 +4113,7 @@ const AdvancedSwapRequestManagement = () => {
 
   // Get token from localStorage
   const token = localStorage.getItem('token');
-  const api = new APIService(token);
+  const api = useMemo(() => new APIService(token), [token]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -4140,15 +4130,7 @@ const AdvancedSwapRequestManagement = () => {
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const timeSlots = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '14:00-15:00', '15:00-16:00', '16:00-17:00'];
 
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  useEffect(() => {
-    loadSwapRequests();
-  }, [filterStatus]);
-
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     setLoading(true);
     try {
       const userData = JSON.parse(localStorage.getItem('user') || '{}');
@@ -4165,9 +4147,10 @@ const AdvancedSwapRequestManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api]);
 
-  const loadSwapRequests = async () => {
+  const loadSwapRequests = useCallback(async () => {
     try {
       const statusFilter = filterStatus === 'all' ? null : filterStatus;
       const facultyId = user?.role === 'faculty' ? user.id : null;
@@ -4176,18 +4159,18 @@ const AdvancedSwapRequestManagement = () => {
     } catch (error) {
       console.error('Failed to load swap requests:', error);
     }
-  };
+  }, [api, filterStatus, user]);
 
-  const loadFaculty = async () => {
+  const loadFaculty = useCallback(async () => {
     try {
       const data = await api.getFaculty();
       setFaculty(data || []);
     } catch (error) {
       console.error('Failed to load faculty:', error);
     }
-  };
+  }, [api]);
 
-  const loadMyClasses = async (userId) => {
+  const loadMyClasses = useCallback(async (userId) => {
     try {
       const profile = await api.getFacultyProfile();
       const classes = await api.getFacultyTimetable(profile.id);
@@ -4196,7 +4179,15 @@ const AdvancedSwapRequestManagement = () => {
     } catch (error) {
       console.error('Failed to load my classes:', error);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
+
+  useEffect(() => {
+    loadSwapRequests();
+  }, [loadSwapRequests]);
 
   const handleValidateRequest = async () => {
     if (!selectedClass || !formData.target_faculty_id || !formData.requested_day || !formData.requested_time_slot) {
@@ -4814,10 +4805,11 @@ const LeaveManagement = () =>  {
     reason: ''
   });
 
+  // eslint-disable-next-line no-unused-vars
   const [impactAnalysis, setImpactAnalysis] = useState(null);
 
   const token = localStorage.getItem('token');
-  const api = new APIService(token);
+  const api = useMemo(() => new APIService(token), [token]);
 
   const leaveTypes = [
     { value: 'Casual', label: '🗓️ Casual Leave', color: 'blue' },
@@ -4828,15 +4820,7 @@ const LeaveManagement = () =>  {
     { value: 'Sabbatical', label: '📖 Sabbatical', color: 'indigo' }
   ];
 
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  useEffect(() => {
-    loadLeaveRequests();
-  }, [filterStatus]);
-
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     setLoading(true);
     try {
       const userData = JSON.parse(localStorage.getItem('user') || '{}');
@@ -4847,9 +4831,10 @@ const LeaveManagement = () =>  {
     } finally {
       setLoading(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const loadLeaveRequests = async () => {
+  const loadLeaveRequests = useCallback(async () => {
     try {
       const data = await api.getLeaveRequests();
       setLeaveRequests(data || []);
@@ -4857,7 +4842,15 @@ const LeaveManagement = () =>  {
       console.error('Failed to load leave requests:', error);
       alert('Failed to load leave requests: ' + error.message);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
+
+  useEffect(() => {
+    loadLeaveRequests();
+  }, [loadLeaveRequests]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -5426,23 +5419,18 @@ const RequestsManagement = () => {
     reason: ''
   });
 
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
 
-  useEffect(() => {
-    loadSwapRequests();
-    loadFaculty();
-  }, []);
-
-  const loadFaculty = async () => {
+  const loadFaculty = useCallback(async () => {
     try {
       const data = await api.getFaculty();
       setFaculty(data);
     } catch (error) {
       console.error('Failed to load faculty:', error);
     }
-  };
+  }, [api]);
 
-  const loadSwapRequests = async () => {
+  const loadSwapRequests = useCallback(async () => {
     try {
       const data = await api.getSwapRequests();
       setSwapRequests(data);
@@ -5451,7 +5439,12 @@ const RequestsManagement = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api]);
+
+  useEffect(() => {
+    loadSwapRequests();
+    loadFaculty();
+  }, [loadSwapRequests, loadFaculty]);
 
   const handleCreateRequest = async () => {
     try {
@@ -5713,22 +5706,9 @@ const Analytics = () => {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
 
-  const api = new APIService();
+  const api = useMemo(() => new APIService(), []);
 
-  useEffect(() => {
-    loadRealTimeAnalytics();
-    
-    let interval;
-    if (autoRefresh) {
-      interval = setInterval(loadRealTimeAnalytics, 30000);
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [selectedBatch, autoRefresh]);
-
-  const loadRealTimeAnalytics = async () => {
+  const loadRealTimeAnalytics = useCallback(async () => {
     try {
       const data = await api.getRealTimeAnalytics(selectedBatch === 'all' ? null : selectedBatch);
       setAnalytics(data);
@@ -5744,7 +5724,20 @@ const Analytics = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [api, selectedBatch]);
+
+  useEffect(() => {
+    loadRealTimeAnalytics();
+    
+    let interval;
+    if (autoRefresh) {
+      interval = setInterval(loadRealTimeAnalytics, 30000);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [loadRealTimeAnalytics, autoRefresh]);
 
   if (loading) return <LoadingSpinner size="lg" />;
 
@@ -5992,7 +5985,8 @@ const ViewTabs = ({ activeView, setActiveView, suggestionsCount }) => {
 };
 
 const FacultySubjectAssignment = () => {
-    const api = new APIService();
+    const api = useMemo(() => new APIService(), []);
+    // eslint-disable-next-line no-unused-vars
     const { user } = useAuth();
     
     const [faculty, setFaculty] = useState([]);
@@ -6006,21 +6000,8 @@ const FacultySubjectAssignment = () => {
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
     const [selectedSubjects, setSelectedSubjects] = useState([]);
-    const [assignMode, setAssignMode] = useState('single'); // 'single' or 'bulk'
 
-    useEffect(() => {
-        loadFaculty();
-    }, []);
-
-    useEffect(() => {
-        if (selectedFaculty) {
-            loadFacultyDetails();
-            loadAvailableSubjects();
-            loadTeachingStats();
-        }
-    }, [selectedFaculty, filterDepartment]);
-
-    const loadFaculty = async () => {
+    const loadFaculty = useCallback(async () => {
         setLoading(true);
         try {
             const data = await api.getFaculty();
@@ -6031,9 +6012,9 @@ const FacultySubjectAssignment = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [api]);
 
-    const loadFacultyDetails = async () => {
+    const loadFacultyDetails = useCallback(async () => {
         if (!selectedFaculty) return;
         
         try {
@@ -6042,9 +6023,9 @@ const FacultySubjectAssignment = () => {
         } catch (error) {
             console.error('Failed to load faculty details:', error);
         }
-    };
+    }, [api, selectedFaculty]);
 
-    const loadAvailableSubjects = async () => {
+    const loadAvailableSubjects = useCallback(async () => {
         if (!selectedFaculty) return;
         
         try {
@@ -6056,9 +6037,9 @@ const FacultySubjectAssignment = () => {
         } catch (error) {
             console.error('Failed to load available subjects:', error);
         }
-    };
+    }, [api, selectedFaculty, filterDepartment]);
 
-    const loadTeachingStats = async () => {
+    const loadTeachingStats = useCallback(async () => {
         if (!selectedFaculty) return;
         
         try {
@@ -6067,7 +6048,19 @@ const FacultySubjectAssignment = () => {
         } catch (error) {
             console.error('Failed to load teaching stats:', error);
         }
-    };
+    }, [api, selectedFaculty]);
+
+    useEffect(() => {
+        loadFaculty();
+    }, [loadFaculty]);
+
+    useEffect(() => {
+        if (selectedFaculty) {
+            loadFacultyDetails();
+            loadAvailableSubjects();
+            loadTeachingStats();
+        }
+    }, [selectedFaculty, loadFacultyDetails, loadAvailableSubjects, loadTeachingStats]);
 
     const handleAssignSubject = async (subjectId, isPrimary = false) => {
         try {
